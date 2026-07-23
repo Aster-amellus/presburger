@@ -1,0 +1,15 @@
+https://doi.org/10.1007/BF01379404
+https://doi.org/10.1007/BF01407835
+https://doi.org/10.1007/BF01407931
+https://doi.org/10.1023/A:1007554627716
+https://doi.org/10.1145/125826.125848
+https://doi.org/10.1145/2896389
+https://doi.org/10.2140/pjm.1966.16.285
+https://hdl.handle.net/1813/6478
+https://icps.u-strasbg.fr/~bastoul/research/papers/Bas04-PACT.pdf
+https://libisl.sourceforge.io/manual.pdf
+https://libisl.sourceforge.io/user.html
+https://msp.org/pjm/1966/16-2/pjm-v16-n2-p09-p.pdf
+https://www.ece.lsu.edu/jxr/pluto/
+https://www21.in.tum.de/teaching/logik/SS16/Exercises/Cooper.pdf
+https://xavierleroy.org/publi/polyhedral-codegen.pdf

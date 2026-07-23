@@ -1,0 +1,5 @@
+outputs/
+work/presburger-tutorial/mdbook/node_modules/
+work/presburger-tutorial/sdd/
+docs/superpowers/
+.DS_Store
