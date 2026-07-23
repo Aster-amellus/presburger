@@ -1,12 +1,26 @@
-export const BOOK_TOML = `[book]
-title = "Presburger Algebra 与 Polyhedral Analysis"
-language = "zh-CN"
+import { LOCALES } from "./lib.mjs";
+
+function tomlString(value) {
+  return JSON.stringify(value);
+}
+
+export function makeBookToml({
+  locale = LOCALES[0],
+  gettextCommand = "mdbook-gettext",
+} = {}) {
+  return `[book]
+title = ${tomlString(locale.title)}
+language = ${tomlString(locale.code)}
 multilingual = false
 src = "src"
 
 [build]
 build-dir = "book"
 create-missing = false
+
+[preprocessor.gettext]
+command = ${tomlString(gettextCommand)}
+after = ["links"]
 
 [output.html]
 default-theme = "light"
@@ -20,6 +34,7 @@ additional-js = [
   "theme/katex/auto-render.min.js",
   "theme/mermaid/mermaid.min.js",
   "theme/math-render.js",
+  "theme/language-switcher.js",
 ]
 
 [output.html.search]
@@ -27,6 +42,9 @@ enable = true
 limit-results = 30
 use-boolean-and = true
 `;
+}
+
+export const BOOK_TOML = makeBookToml();
 
 export const MATH_RENDER_JS = `function renderBookMath() {
   let errors = 0;
@@ -122,6 +140,47 @@ export const BOOK_CSS = `.content main {
     max-width: 100%;
   }
 }
+`;
+
+export const LANGUAGE_SWITCHER_JS = `(function installLanguageSwitcher(global) {
+  function languageTarget(href, language) {
+    const url = new URL(href);
+    const parts = url.pathname.split("/");
+    if (String(language).toLowerCase() === "ca") {
+      const marker = parts.lastIndexOf("ca");
+      if (marker !== -1) parts.splice(marker, 1);
+    } else {
+      parts.splice(parts.length - 1, 0, "ca");
+    }
+    url.pathname = parts.join("/");
+    return url.href;
+  }
+
+  global.presburgerLanguageTarget = languageTarget;
+  if (typeof document === "undefined") return;
+
+  const install = () => {
+    const toolbar = document.querySelector("#menu-bar .right-buttons");
+    if (!toolbar || document.querySelector("#language-switcher")) return;
+    const language = document.documentElement.lang;
+    const link = document.createElement("a");
+    link.id = "language-switcher";
+    link.className = "icon-button";
+    link.href = languageTarget(window.location.href, language);
+    link.textContent = String(language).toLowerCase() === "ca" ? "中文" : "Català";
+    link.title = String(language).toLowerCase() === "ca"
+      ? "切换到中文"
+      : "Canvia al català";
+    link.setAttribute("aria-label", link.title);
+    toolbar.prepend(link);
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", install, { once: true });
+  } else {
+    install();
+  }
+})(globalThis);
 `;
 
 export const README_MD = `# Presburger Algebra 与 Polyhedral Analysis（mdBook）

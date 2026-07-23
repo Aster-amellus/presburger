@@ -10,6 +10,7 @@ import {
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import vm from "node:vm";
 import { resolveBuildDependencies } from "../build-config.mjs";
 import { publishBook, stageBook } from "../generator.mjs";
 
@@ -27,6 +28,10 @@ src = "src"
 build-dir = "book"
 create-missing = false
 
+[preprocessor.gettext]
+command = "mdbook-gettext"
+after = ["links"]
+
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "navy"
@@ -39,6 +44,7 @@ additional-js = [
   "theme/katex/auto-render.min.js",
   "theme/mermaid/mermaid.min.js",
   "theme/math-render.js",
+  "theme/language-switcher.js",
 ]
 
 [output.html.search]
@@ -156,9 +162,95 @@ test("stageBook keeps KaTeX fonts offline in the mdBook output", (t) => {
 
   assert.equal(manifest.built, true);
   assert(existsSync(path.join(project, "book/index.html")));
+  assert(existsSync(path.join(project, "book/ca/index.html")));
   assert(existsSync(path.join(project, "book/print.html")));
+  assert(existsSync(path.join(project, "book/ca/print.html")));
   assert(existsSync(path.join(project, "book/theme/katex/fonts/KaTeX_Main-Regular.woff2")));
+  assert(existsSync(path.join(project, "book/ca/theme/katex/fonts/KaTeX_Main-Regular.woff2")));
   assert(existsSync(path.join(project, "book/theme/katex/LICENSE")));
+  assert.equal(
+    readFileSync(path.join(project, "book/theme/katex/katex.min.js"), "utf8"),
+    readFileSync(path.join(project, "book/ca/theme/katex/katex.min.js"), "utf8"),
+  );
+  assert.match(readFileSync(path.join(project, "book/index.html"), "utf8"), /<html lang="zh-CN"/);
+  assert.match(readFileSync(path.join(project, "book/ca/index.html"), "utf8"), /<html lang="ca"/);
+  assert.match(
+    readFileSync(path.join(project, "book/ca/index.html"), "utf8"),
+    /Àlgebra de Presburger i anàlisi polièdrica/,
+  );
+});
+
+test("language switcher targets the same page and anchor in both directions", (t) => {
+  const temporary = temporaryDirectory(t);
+  const project = path.join(temporary, "project");
+  stageBook({
+    sourceDir: CANONICAL_SOURCE,
+    projectDir: project,
+    katexPackageDir: KATEX_PACKAGE,
+    mdbookBin: MDBOOK_BIN,
+    runBuild: true,
+  });
+
+  const rootScript = readFileSync(path.join(project, "book/theme/language-switcher.js"), "utf8");
+  const catalanScript = readFileSync(
+    path.join(project, "book/ca/theme/language-switcher.js"),
+    "utf8",
+  );
+  assert.equal(catalanScript, rootScript);
+
+  const context = vm.createContext({ URL });
+  vm.runInContext(rootScript, context);
+  assert.equal(
+    context.presburgerLanguageTarget(
+      "https://example.test/course/07-dependence-analysis.html#ans-ex07-b01",
+      "zh-CN",
+    ),
+    "https://example.test/course/ca/07-dependence-analysis.html#ans-ex07-b01",
+  );
+  assert.equal(
+    context.presburgerLanguageTarget(
+      "https://example.test/course/ca/07-dependence-analysis.html#ans-ex07-b01",
+      "ca",
+    ),
+    "https://example.test/course/07-dependence-analysis.html#ans-ex07-b01",
+  );
+  assert.match(readFileSync(path.join(project, "book/index.html"), "utf8"), /language-switcher\.js/);
+  assert.match(
+    readFileSync(path.join(project, "book/ca/07-dependence-analysis.html"), "utf8"),
+    /language-switcher\.js/,
+  );
+});
+
+test("stageBook copies an optional PO directory without changing canonical chapters", (t) => {
+  const temporary = temporaryDirectory(t);
+  const project = path.join(temporary, "project");
+  const poDir = path.join(temporary, "po");
+  mkdirSync(poDir);
+  writeFileSync(path.join(poDir, "ca.po"), [
+    'msgid ""',
+    'msgstr ""',
+    '"Language: ca\\n"',
+    "",
+  ].join("\n"));
+  const canonicalBefore = readFileSync(path.join(CANONICAL_SOURCE, "01-polyhedral-recap.md"), "utf8");
+
+  stageBook({
+    sourceDir: CANONICAL_SOURCE,
+    projectDir: project,
+    poDir,
+    katexPackageDir: KATEX_PACKAGE,
+    mdbookBin: MDBOOK_BIN,
+    runBuild: false,
+  });
+
+  assert.equal(
+    readFileSync(path.join(project, "po/ca.po"), "utf8"),
+    readFileSync(path.join(poDir, "ca.po"), "utf8"),
+  );
+  assert.equal(
+    readFileSync(path.join(CANONICAL_SOURCE, "01-polyhedral-recap.md"), "utf8"),
+    canonicalBefore,
+  );
 });
 
 test("stageBook keeps Mermaid and its renderer offline", (t) => {

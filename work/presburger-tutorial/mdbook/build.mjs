@@ -8,7 +8,7 @@ const outputs = path.join(workspace, "outputs");
 mkdirSync(outputs, { recursive: true });
 const staging = mkdtempSync(path.join(outputs, ".presburger-mdbook-"));
 const target = path.join(outputs, "presburger-algebra-polyhedral-analysis-mdbook");
-const { katexPackageDir, mdbookBin } = resolveBuildDependencies();
+const { katexPackageDir, mdbookBin, mdbookGettextBin } = resolveBuildDependencies();
 
 try {
   const manifest = stageBook({
@@ -16,6 +16,8 @@ try {
     projectDir: staging,
     katexPackageDir,
     mdbookBin,
+    mdbookGettextBin,
+    poDir: path.join(import.meta.dirname, "po"),
     runBuild: true,
   });
   publishBook(staging, target);

@@ -14,6 +14,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   CHAPTERS,
+  LOCALES,
+  addStableHeadingIds,
   assertIdContract,
   collectIds,
   countMath,
@@ -22,7 +24,14 @@ import {
   rewriteInlineCodeMath,
   rewriteMathDelimitersForMdBook,
 } from "./lib.mjs";
-import { BOOK_CSS, BOOK_TOML, MATH_RENDER_JS, README_MD } from "./templates.mjs";
+import { REQUIRED_TOOL_VERSIONS } from "./build-config.mjs";
+import {
+  BOOK_CSS,
+  LANGUAGE_SWITCHER_JS,
+  MATH_RENDER_JS,
+  README_MD,
+  makeBookToml,
+} from "./templates.mjs";
 
 const REQUIRED_KATEX_VERSION = "0.16.22";
 const REQUIRED_MERMAID_VERSION = "11.16.0";
@@ -70,7 +79,7 @@ function prepareChapters(sourceDir) {
 
     generated.push({
       target: entry.target,
-      text: rewriteMathDelimitersForMdBook(mathRewritten),
+      text: addStableHeadingIds(rewriteMathDelimitersForMdBook(mathRewritten)),
     });
     manifest.pages += 1;
     manifest.answerRewrites += rewritten.answerRewrites;
@@ -120,9 +129,9 @@ function copyKatex(katexPackageDir, projectDir) {
   cpSync(path.join(katexPackageDir, "LICENSE"), path.join(destination, "LICENSE"));
 }
 
-function copyBuiltKatexAssets(projectDir) {
+function copyBuiltKatexAssets(projectDir, outputDir) {
   const source = path.join(projectDir, "theme/katex");
-  const destination = path.join(projectDir, "book/theme/katex");
+  const destination = path.join(outputDir, "theme/katex");
   mkdirSync(destination, { recursive: true });
   cpSync(path.join(source, "fonts"), path.join(destination, "fonts"), { recursive: true });
   cpSync(path.join(source, "LICENSE"), path.join(destination, "LICENSE"));
@@ -138,9 +147,9 @@ function copyMermaid(mermaidPackageDir, projectDir) {
   cpSync(path.join(mermaidPackageDir, "LICENSE"), path.join(destination, "LICENSE"));
 }
 
-function copyBuiltMermaidAssets(projectDir) {
+function copyBuiltMermaidAssets(projectDir, outputDir) {
   const source = path.join(projectDir, "theme/mermaid");
-  const destination = path.join(projectDir, "book/theme/mermaid");
+  const destination = path.join(outputDir, "theme/mermaid");
   mkdirSync(destination, { recursive: true });
   cpSync(source, destination, { recursive: true });
 }
@@ -148,9 +157,11 @@ function copyBuiltMermaidAssets(projectDir) {
 export function stageBook({
   sourceDir,
   projectDir,
+  poDir,
   katexPackageDir,
   mermaidPackageDir = DEFAULT_MERMAID_PACKAGE,
   mdbookBin,
+  mdbookGettextBin = "mdbook-gettext",
   runBuild = false,
 }) {
   const katexVersion = readKatexVersion(katexPackageDir);
@@ -164,23 +175,48 @@ export function stageBook({
     writeFileSync(path.join(projectDir, "src", page.target), page.text);
   }
   writeFileSync(path.join(projectDir, "src/SUMMARY.md"), makeSummary());
-  writeFileSync(path.join(projectDir, "book.toml"), BOOK_TOML);
+  writeFileSync(path.join(projectDir, "book.toml"), makeBookToml());
   writeFileSync(path.join(projectDir, "README.md"), README_MD);
   writeFileSync(path.join(projectDir, "theme/book.css"), BOOK_CSS);
   writeFileSync(path.join(projectDir, "theme/math-render.js"), MATH_RENDER_JS);
+  writeFileSync(path.join(projectDir, "theme/language-switcher.js"), LANGUAGE_SWITCHER_JS);
+  if (poDir !== undefined && existsSync(poDir)) {
+    cpSync(poDir, path.join(projectDir, "po"), { recursive: true });
+  }
   copyKatex(katexPackageDir, projectDir);
   copyMermaid(mermaidPackageDir, projectDir);
 
   let mdbookOutput = "";
   if (runBuild) {
-    const result = spawnSync(mdbookBin, ["build", projectDir], { encoding: "utf8" });
-    mdbookOutput = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-    if (result.error) throw new Error(`Unable to run mdBook: ${result.error.message}`);
-    if (result.status !== 0) {
-      throw new Error(`mdBook build failed with exit ${result.status}\n${mdbookOutput}`);
+    assertToolVersion(
+      mdbookBin,
+      "mdBook",
+      REQUIRED_TOOL_VERSIONS.mdbook,
+    );
+
+    for (const locale of LOCALES) {
+      writeFileSync(
+        path.join(projectDir, "book.toml"),
+        makeBookToml({ locale, gettextCommand: mdbookGettextBin }),
+      );
+      const outputDir = path.join(projectDir, locale.outputDir);
+      const result = spawnSync(
+        mdbookBin,
+        ["build", projectDir, "--dest-dir", outputDir],
+        { encoding: "utf8" },
+      );
+      const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+      mdbookOutput += output;
+      if (result.error) throw new Error(`Unable to run mdBook: ${result.error.message}`);
+      if (result.status !== 0) {
+        throw new Error(
+          `mdBook build for ${locale.code} failed with exit ${result.status}\n${output}`,
+        );
+      }
+      copyBuiltKatexAssets(projectDir, outputDir);
+      copyBuiltMermaidAssets(projectDir, outputDir);
     }
-    copyBuiltKatexAssets(projectDir);
-    copyBuiltMermaidAssets(projectDir);
+    writeFileSync(path.join(projectDir, "book.toml"), makeBookToml());
   }
 
   return {
@@ -188,8 +224,18 @@ export function stageBook({
     katexVersion,
     mermaidVersion,
     built: runBuild,
+    locales: LOCALES.map(({ code, outputDir }) => ({ code, outputDir })),
     mdbookOutput,
   };
+}
+
+function assertToolVersion(binary, name, requiredVersion) {
+  const result = spawnSync(binary, ["--version"], { encoding: "utf8" });
+  if (result.error) throw new Error(`Unable to run ${name}: ${result.error.message}`);
+  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+  if (result.status !== 0 || !new RegExp(`(?:^|\\s)v?${requiredVersion.replaceAll(".", "\\.")}(?:\\s|$)`).test(output)) {
+    throw new Error(`${name} version ${requiredVersion} required; found ${output || "unknown"}`);
+  }
 }
 
 function assertSafeTarget(target) {

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import * as bookLib from "../lib.mjs";
 import {
   CHAPTERS,
   rewriteMarkdown,
@@ -10,6 +11,47 @@ import {
   rewriteMathDelimitersForMdBook,
   rewriteInlineCodeMath,
 } from "../lib.mjs";
+
+test("locale metadata keeps Chinese at the root and Catalan under ca", () => {
+  assert.deepEqual(
+    bookLib.LOCALES?.map(({ code, outputDir, title }) => ({ code, outputDir, title })),
+    [
+      {
+        code: "zh-CN",
+        outputDir: "book",
+        title: "Presburger Algebra 与 Polyhedral Analysis",
+      },
+      {
+        code: "ca",
+        outputDir: "book/ca",
+        title: "Àlgebra de Presburger i anàlisi polièdrica",
+      },
+    ],
+  );
+});
+
+test("stable heading IDs survive translated heading text", () => {
+  assert.equal(
+    bookLib.addStableHeadingIds?.([
+      "# 前言与阅读路线",
+      "### \\(T=3,N=6\\)：十二个实例",
+      "## 重复",
+      "## 重复",
+      "```markdown",
+      "# 代码中的标题",
+      "```",
+    ].join("\n")),
+    [
+      "# 前言与阅读路线 { #前言与阅读路线 }",
+      "### \\(T=3,N=6\\)：十二个实例 { #t3n6十二个实例 }",
+      "## 重复 { #重复 }",
+      "## 重复 { #重复-1 }",
+      "```markdown",
+      "# 代码中的标题",
+      "```",
+    ].join("\n"),
+  );
+});
 
 test("chapter manifest has frontmatter, chapters 1-12, and appendix", () => {
   assert.equal(CHAPTERS.length, 14);

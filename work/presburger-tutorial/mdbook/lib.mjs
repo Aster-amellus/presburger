@@ -15,6 +15,21 @@ export const CHAPTERS = [
   { source: "../chapters/13-appendices.md", target: "appendices.md", title: "附录：练习答案、符号速查与延伸阅读", kind: "appendix" },
 ];
 
+export const LOCALES = Object.freeze([
+  Object.freeze({
+    code: "zh-CN",
+    outputDir: "book",
+    title: "Presburger Algebra 与 Polyhedral Analysis",
+    switchLabel: "Català",
+  }),
+  Object.freeze({
+    code: "ca",
+    outputDir: "book/ca",
+    title: "Àlgebra de Presburger i anàlisi polièdrica",
+    switchLabel: "中文",
+  }),
+]);
+
 function maskCode(text) {
   return text.replace(/[^\n]/g, " ");
 }
@@ -88,6 +103,64 @@ function mapOutsideCode(text, transformOutside, transformCode = (code) => code) 
     outsideStart = position;
   }
   return output + processInlineCode(text.slice(outsideStart), transformOutside, transformCode);
+}
+
+function mapOutsideFencedCode(text, transformOutside) {
+  let output = "";
+  let outsideStart = 0;
+  let position = 0;
+  while (position < text.length) {
+    const fence = openingFence(text, position);
+    if (!fence) {
+      const nextLine = text.indexOf("\n", position);
+      position = nextLine === -1 ? text.length : nextLine + 1;
+      continue;
+    }
+
+    output += transformOutside(text.slice(outsideStart, position));
+    const fencedStart = position;
+    position = fence.end;
+    let closing;
+    while (position < text.length && !(closing = closingFence(text, position, fence))) {
+      const nextLine = text.indexOf("\n", position);
+      position = nextLine === -1 ? text.length : nextLine + 1;
+    }
+    position = closing ?? text.length;
+    output += text.slice(fencedStart, position);
+    outsideStart = position;
+  }
+  return output + transformOutside(text.slice(outsideStart));
+}
+
+function normalizeHeadingId(content) {
+  const withoutHtml = content
+    .replace(/<.*?>/g, "")
+    .replace(/&lt;|&gt;|&amp;|&#39;|&quot;/g, "")
+    .trim();
+  let id = "";
+  for (const character of withoutHtml) {
+    if (/[\p{Letter}\p{Number}_-]/u.test(character)) {
+      id += /[A-Z]/.test(character) ? character.toLowerCase() : character;
+    } else if (/\s/u.test(character)) {
+      id += "-";
+    }
+  }
+  return id;
+}
+
+export function addStableHeadingIds(text) {
+  const counts = new Map();
+  return mapOutsideFencedCode(text, (outside) => outside.replace(
+    /^( {0,3})(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/gm,
+    (whole, indent, marker, content) => {
+      if (/\{\s*#[^\s}]+/.test(content)) return whole;
+      const baseId = normalizeHeadingId(content);
+      const count = counts.get(baseId) ?? 0;
+      counts.set(baseId, count + 1);
+      const id = count === 0 ? baseId : `${baseId}-${count}`;
+      return `${indent}${marker} ${content} { #${id} }`;
+    },
+  ));
 }
 
 export function rewriteMarkdown(entry, text) {
