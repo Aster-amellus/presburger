@@ -4,16 +4,33 @@ import path from "node:path";
 import test from "node:test";
 
 const WORKSPACE = path.resolve(import.meta.dirname, "../../../..");
-const WORKFLOW = path.join(WORKSPACE, ".github/workflows/presburger-pages.yml");
+const PAGES_BUILD_SCRIPT = path.join(
+  WORKSPACE,
+  "work/presburger-tutorial/mdbook/cloudflare-pages-build.sh",
+);
+const DEPLOY_WORKFLOW = path.join(WORKSPACE, ".github/workflows/presburger-pages.yml");
+const PAGES_GUIDE = path.join(WORKSPACE, "work/presburger-tutorial/mdbook/CLOUDFLARE_PAGES.md");
 
-test("Pages workflow builds and deploys the generated book", () => {
-  assert(existsSync(WORKFLOW), "Pages workflow is missing");
-  const workflow = readFileSync(WORKFLOW, "utf8");
+test("Cloudflare Pages build script installs the pinned mdBook and runs the book CI", () => {
+  assert(existsSync(PAGES_BUILD_SCRIPT), "Cloudflare Pages build script is missing");
+  const script = readFileSync(PAGES_BUILD_SCRIPT, "utf8");
 
-  assert.match(workflow, /push:[\s\S]*main/);
-  assert.match(workflow, /CLOUDFLARE_API_TOKEN/);
-  assert.match(workflow, /CLOUDFLARE_ACCOUNT_ID/);
-  assert.match(workflow, /presburger-algebra-polyhedral-analysis-mdbook\/book/);
-  assert.match(workflow, /--project-name=presburger/);
-  assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
+  assert.match(script, /MDBOOK_VERSION=0\.4\.52/);
+  assert.match(
+    script,
+    /github\.com\/rust-lang\/mdBook\/releases\/download\/v\$\{MDBOOK_VERSION\}\/mdbook-v\$\{MDBOOK_VERSION\}-x86_64-unknown-linux-gnu\.tar\.gz/,
+  );
+  assert.match(script, /npm ci --prefix work\/presburger-tutorial\/mdbook/);
+  assert.match(script, /MDBOOK_BIN="\$tool_dir\/mdbook" npm run ci --prefix work\/presburger-tutorial\/mdbook/);
+});
+
+test("Cloudflare Pages documentation uses the native build and unique output directory", () => {
+  assert.equal(existsSync(DEPLOY_WORKFLOW), false, "GitHub deployment workflow must be removed");
+  assert(existsSync(PAGES_GUIDE), "Cloudflare Pages configuration guide is missing");
+  const guide = readFileSync(PAGES_GUIDE, "utf8");
+
+  assert.match(guide, /bash work\/presburger-tutorial\/mdbook\/cloudflare-pages-build\.sh/);
+  assert.match(guide, /outputs\/presburger-algebra-polyhedral-analysis-mdbook\/book/);
+  assert.match(guide, /Production branch[^\n]*main/);
+  assert.doesNotMatch(guide, /npx wrangler deploy/);
 });
