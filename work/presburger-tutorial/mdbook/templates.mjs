@@ -143,17 +143,16 @@ export const BOOK_CSS = `.content main {
 `;
 
 export const LANGUAGE_SWITCHER_JS = `(function installLanguageSwitcher(global) {
-  function languageTarget(href, language) {
-    const url = new URL(href);
-    const parts = url.pathname.split("/");
-    if (String(language).toLowerCase() === "ca") {
-      const marker = parts.lastIndexOf("ca");
-      if (marker !== -1) parts.splice(marker, 1);
-    } else {
-      parts.splice(parts.length - 1, 0, "ca");
-    }
-    url.pathname = parts.join("/");
-    return url.href;
+  function languageTarget(href, language, pathToRoot) {
+    const current = new URL(href);
+    const localeRoot = new URL(pathToRoot || "./", current);
+    const pagePath = current.pathname.slice(localeRoot.pathname.length);
+    const isCatalan = String(language).toLowerCase() === "ca";
+    const bookRoot = isCatalan ? new URL("../", localeRoot) : localeRoot;
+    const target = new URL((isCatalan ? "" : "ca/") + pagePath, bookRoot);
+    target.search = current.search;
+    target.hash = current.hash;
+    return target.href;
   }
 
   global.presburgerLanguageTarget = languageTarget;
@@ -166,7 +165,8 @@ export const LANGUAGE_SWITCHER_JS = `(function installLanguageSwitcher(global) {
     const link = document.createElement("a");
     link.id = "language-switcher";
     link.className = "icon-button";
-    link.href = languageTarget(window.location.href, language);
+    const rootHint = typeof path_to_root === "string" ? path_to_root : "";
+    link.href = languageTarget(window.location.href, language, rootHint);
     link.textContent = String(language).toLowerCase() === "ca" ? "中文" : "Català";
     link.title = String(language).toLowerCase() === "ca"
       ? "切换到中文"

@@ -202,23 +202,74 @@ test("language switcher targets the same page and anchor in both directions", (t
   vm.runInContext(rootScript, context);
   assert.equal(
     context.presburgerLanguageTarget(
-      "https://example.test/course/07-dependence-analysis.html#ans-ex07-b01",
+      "https://example.test/course/guide/chapter/page.html?mode=study#section-2",
       "zh-CN",
+      "../../",
     ),
-    "https://example.test/course/ca/07-dependence-analysis.html#ans-ex07-b01",
+    "https://example.test/course/ca/guide/chapter/page.html?mode=study#section-2",
   );
   assert.equal(
     context.presburgerLanguageTarget(
-      "https://example.test/course/ca/07-dependence-analysis.html#ans-ex07-b01",
+      "https://example.test/course/ca/guide/chapter/page.html?mode=study#section-2",
       "ca",
+      "../../",
     ),
-    "https://example.test/course/07-dependence-analysis.html#ans-ex07-b01",
+    "https://example.test/course/guide/chapter/page.html?mode=study#section-2",
+  );
+  assert.equal(
+    context.presburgerLanguageTarget(
+      "https://example.test/arbitrary/base/index.html#reading-route",
+      "zh-CN",
+      "",
+    ),
+    "https://example.test/arbitrary/base/ca/index.html#reading-route",
   );
   assert.match(readFileSync(path.join(project, "book/index.html"), "utf8"), /language-switcher\.js/);
   assert.match(
     readFileSync(path.join(project, "book/ca/07-dependence-analysis.html"), "utf8"),
     /language-switcher\.js/,
   );
+});
+
+test("Catalan build translates a heading while preserving its source anchor", (t) => {
+  const temporary = temporaryDirectory(t);
+  const project = path.join(temporary, "project");
+  const poDir = path.join(temporary, "po");
+  mkdirSync(poDir);
+  writeFileSync(path.join(poDir, "ca.po"), [
+    'msgid ""',
+    'msgstr ""',
+    '"Project-Id-Version: presburger-mdbook-test\\n"',
+    '"POT-Creation-Date: 2026-07-23 00:00+0000\\n"',
+    '"PO-Revision-Date: 2026-07-23 00:00+0000\\n"',
+    '"Language-Team: Catalan\\n"',
+    '"MIME-Version: 1.0\\n"',
+    '"Language: ca\\n"',
+    '"Content-Type: text/plain; charset=UTF-8\\n"',
+    '"Content-Transfer-Encoding: 8bit\\n"',
+    '"Plural-Forms: nplurals=2; plural=(n != 1);\\n"',
+    "",
+    '#: src/README.md:1',
+    'msgid "前言与阅读路线"',
+    'msgstr "Pròleg i itinerari de lectura"',
+    "",
+  ].join("\n"));
+
+  stageBook({
+    sourceDir: CANONICAL_SOURCE,
+    projectDir: project,
+    poDir,
+    katexPackageDir: KATEX_PACKAGE,
+    mdbookBin: MDBOOK_BIN,
+    runBuild: true,
+  });
+
+  const catalan = readFileSync(path.join(project, "book/ca/index.html"), "utf8");
+  assert.match(
+    catalan,
+    /<h1 id="前言与阅读路线"><a class="header" href="#前言与阅读路线">Pròleg i itinerari de lectura<\/a><\/h1>/,
+  );
+  assert.doesNotMatch(catalan, /<h1 id="pròleg-i-itinerari-de-lectura"/);
 });
 
 test("stageBook copies an optional PO directory without changing canonical chapters", (t) => {
