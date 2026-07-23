@@ -14,6 +14,7 @@ curl -fsSL "https://github.com/rust-lang/mdBook/releases/download/v${MDBOOK_VERS
 test -x "$tool_dir/mdbook"
 
 export CARGO_HOME RUSTUP_HOME
+export PATH="$CARGO_HOME/bin:$PATH"
 curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
   | sh -s -- -y --profile minimal --no-modify-path
 "$CARGO_HOME/bin/cargo" install --locked mdbook-i18n-helpers --version "${MDBOOK_I18N_HELPERS_VERSION}"

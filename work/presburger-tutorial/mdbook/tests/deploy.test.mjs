@@ -24,6 +24,7 @@ test("Cloudflare Pages build script installs the pinned mdBook, gettext helper, 
   assert.match(script, /https:\/\/sh\.rustup\.rs/);
   assert.match(script, /"\$CARGO_HOME\/bin\/cargo" install --locked mdbook-i18n-helpers --version "\$\{MDBOOK_I18N_HELPERS_VERSION\}"/);
   assert.match(script, /test -x "\$CARGO_HOME\/bin\/mdbook-gettext"/);
+  assert.match(script, /export PATH="\$CARGO_HOME\/bin:\$PATH"/);
   assert.match(script, /npm ci --prefix work\/presburger-tutorial\/mdbook/);
   assert.match(script, /MDBOOK_BIN="\$tool_dir\/mdbook" MDBOOK_GETTEXT_BIN="\$CARGO_HOME\/bin\/mdbook-gettext" npm run ci --prefix work\/presburger-tutorial\/mdbook/);
 });
