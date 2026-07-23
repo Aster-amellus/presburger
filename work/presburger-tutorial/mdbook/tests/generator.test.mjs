@@ -17,6 +17,7 @@ import { publishBook, stageBook } from "../generator.mjs";
 const CANONICAL_SOURCE = path.resolve(import.meta.dirname, "../../chapters");
 const { katexPackageDir: KATEX_PACKAGE, mdbookBin: MDBOOK_BIN } = resolveBuildDependencies();
 const WORKSPACE = path.resolve(import.meta.dirname, "../../../..");
+const PRODUCTION_PO_DIR = path.join(WORKSPACE, "work/presburger-tutorial/mdbook/po");
 
 const EXPECTED_BOOK_TOML = `[book]
 title = "Presburger Algebra 与 Polyhedral Analysis"
@@ -270,6 +271,44 @@ test("Catalan build translates a heading while preserving its source anchor", (t
     /<h1 id="前言与阅读路线"><a class="header" href="#前言与阅读路线">Pròleg i itinerari de lectura<\/a><\/h1>/,
   );
   assert.doesNotMatch(catalan, /<h1 id="pròleg-i-itinerari-de-lectura"/);
+});
+
+test("production Catalan catalog leaves no visible Chinese prose", (t) => {
+  const temporary = temporaryDirectory(t);
+  const project = path.join(temporary, "project");
+  stageBook({
+    sourceDir: CANONICAL_SOURCE,
+    projectDir: project,
+    poDir: PRODUCTION_PO_DIR,
+    katexPackageDir: KATEX_PACKAGE,
+    mdbookBin: MDBOOK_BIN,
+    runBuild: true,
+  });
+
+  for (const page of [
+    "index.html",
+    "01-polyhedral-recap.html",
+    "02-presburger-syntax.html",
+    "03-decidability-elimination.html",
+    "04-set-relation-algebra.html",
+    "05-semilinear-polyhedra.html",
+    "06-program-modeling.html",
+    "07-dependence-analysis.html",
+    "08-affine-scheduling.html",
+    "09-farkas-ilp.html",
+    "10-transformations.html",
+    "11-code-generation.html",
+    "12-end-to-end.html",
+    "appendices.html",
+  ]) {
+    const html = readFileSync(path.join(project, "book/ca", page), "utf8");
+    const visibleProse = html
+      .replace(/<script[\s\S]*?<\/script>/g, "")
+      .replace(/<style[\s\S]*?<\/style>/g, "")
+      .replace(/<pre[\s\S]*?<\/pre>/g, "")
+      .replace(/<[^>]+>/g, " ");
+    assert.doesNotMatch(visibleProse, /[\p{Script=Han}]/u, page);
+  }
 });
 
 test("stageBook copies an optional PO directory without changing canonical chapters", (t) => {
